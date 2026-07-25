@@ -1,0 +1,18 @@
+hebmorph
+========
+
+hebmorph is a Go port of the morphological-analysis core of Hspell, and it
+embeds Hspell's Hebrew dictionary data.
+
+Hspell is copyright (C) 2000-2017, Nadav Har'El and Dan Kenigsberg
+(http://hspell.ivrix.org.il) and is released under the GNU Affero General
+Public License (AGPL) version 3. Per the Hspell license, not only its programs
+but also its dictionary files and generated word lists are covered by the AGPL.
+
+Because this project is derived from Hspell's code and redistributes its
+dictionary data (in a re-encoded UTF-8 form under data/hebrew.dict.gz, generated
+from the original files kept under internal/gen/source/), hebmorph as a whole is
+likewise licensed under the AGPL version 3. See the LICENSE file for the full
+license text.
+
+There is no warranty of any kind for the contents of this distribution.

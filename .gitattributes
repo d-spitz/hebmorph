@@ -1,0 +1,1 @@
+data/hebrew.dict.gz filter=lfs diff=lfs merge=lfs -text
