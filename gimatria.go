@@ -79,6 +79,24 @@ var (
 )
 
 // gimatriaString renders n as its canonical Hebrew numeral.
+//
+// TODO: broken for any numeral built from a multi-rune digit — the hundreds
+// תק/תר/תש/תת/תתק and the specials טו/טז. The reversal below flips the whole
+// rune slice, including the runes *within* one of those digits, so the letters
+// of the digit come out backwards:
+//
+//	תשע"ה (775) is rejected, while שתע"ה is accepted as 775
+//	ט"ו   (15)  is rejected, while ו"ט   is accepted as 15
+//	תקכ"ג (523) is rejected, while קתכ"ג is accepted as 523
+//
+// That means 15, 16 and everything from 500 up is wrong. The fix is to collect
+// each digit as a string and reverse the order of the digits, rather than
+// reversing runes. Left alone for now: gimatria is a side feature, and it is
+// not yet established whether hspell's C original behaves the same way.
+//
+// This escaped the byte-for-byte comparison against the reference port because
+// canonicGimatria only runs for words *absent* from the dictionary, so a
+// dictionary-driven diff never reaches it.
 func gimatriaString(n int) string {
 	var b []rune
 	i := 0

@@ -60,6 +60,55 @@ Example (`-pretty`, trimmed):
 }
 ```
 
+## HTTP API
+
+```sh
+go build -o hebmorphd ./cmd/hebmorphd
+./hebmorphd -addr :8080
+
+curl -s http://localhost:8080/api/v1/analyze/מלכה
+```
+
+One endpoint, `GET /api/v1/analyze/{word}`, returning the same JSON object the
+library and CLI produce. A word the dictionary does not recognize is not an
+error — it comes back with an empty `splits` list.
+
+Callers must normalize input themselves: lookup is an exact string match against
+undotted ktiv male forms, so niqqud must be stripped and ktiv haser converted to
+ktiv male first. Rather than answer un-normalized input with a silently empty
+analysis, the endpoint validates against `^['"א-ת]+$` and explains the problem:
+
+```sh
+curl -s http://localhost:8080/api/v1/analyze/מַלְכָּה
+# 400 {"message":"word contains niqqud or cantillation (U+05B7); the dictionary
+#      holds only undotted ktiv male forms, so send \"מלכה\" instead"}
+```
+
+That character set is not a guess — every one of the 341,585 dictionary entries
+is built from exactly 29 runes: the Hebrew letters alef..tav (finals included)
+plus the ASCII `'` and `"` that spell geresh and gershayim. So acronyms (`צה"ל`),
+abbreviations (`וכו'`), loanwords (`ג'ינס`) and gimatria numerals (`י"ד`) all pass,
+while niqqud, Latin, digits, whitespace and other punctuation are refused.
+
+Ktiv haser is not detectable this way, so `ספר` for `סֵפֶר` is accepted and analyzed
+as written.
+
+The API is described by [`api/openapi.yaml`](api/openapi.yaml), which the server
+also serves at `/api/v1/openapi.yaml`. Routing, path-parameter binding and the
+response types live in `api/api.gen.go`, generated from that spec by
+[oapi-codegen](https://github.com/oapi-codegen/oapi-codegen):
+
+```sh
+go generate ./api
+# == go tool oapi-codegen -config api/cfg.yaml api/openapi.yaml
+```
+
+The schemas carry `x-go-type`, so the generated models are aliases for the
+existing `hebmorph` types (`type Analysis = hebmorph.Analysis`) rather than
+parallel copies — the spec documents the payload without introducing a mapping
+layer to keep in sync. The only hand-written code is the handler in
+[`api/server.go`](api/server.go), which calls `Analyze` and returns the result.
+
 ## Design
 
 - **UTF-8 throughout.** The dictionary is stored in UTF-8 and the analysis walks
@@ -82,6 +131,8 @@ Source files:
 | `gimatria.go`      | canonical Hebrew-numeral recognition                   |
 | `data.go`          | embedded dictionary decode + lookup                    |
 | `prefixes_data.go` | generated legal-prefix table                           |
+| `api/openapi.yaml` | HTTP API spec; `api/api.gen.go` is generated from it   |
+| `api/server.go`    | the handler behind the generated routing               |
 
 ## Regenerating the dictionary
 

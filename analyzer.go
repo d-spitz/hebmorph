@@ -16,8 +16,9 @@ package hebmorph
 type Analysis struct {
 	Word   string `json:"word"`
 	Exists bool   `json:"exists"`
-	// Gimatria is set when the word is a canonical Hebrew numeral (e.g. תשע"ה),
-	// giving its numeric value.
+	// Gimatria is set when the word is a canonical Hebrew numeral (e.g. י"ד,
+	// 14), giving its numeric value. See the TODO on gimatriaString: numerals
+	// using a multi-rune digit are currently not recognized.
 	Gimatria *int    `json:"gimatria,omitempty"`
 	Splits   []Split `json:"splits"`
 }

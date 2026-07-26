@@ -1,2 +1,6 @@
 dist/
 internal/
+
+# binaries from the build commands in README.md
+/hebmorph
+/hebmorphd

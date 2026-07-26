@@ -1,0 +1,198 @@
+openapi: 3.0.3
+
+info:
+  title: hebmorph
+  description: |
+    Hebrew morphological analysis. Given a word, the API returns the ways it
+    splits into a known prefix and base, and for each base the possible
+    morphological readings.
+
+    Input is expected already normalized: undotted (no niqqud) and in ktiv
+    male spelling. See the `word` parameter.
+  version: "1.0.0"
+  license:
+    name: AGPL-3.0-or-later
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+
+servers:
+  - url: /api/v1
+
+paths:
+  /analyze/{word}:
+    get:
+      operationId: analyzeWord
+      summary: Analyze one Hebrew word
+      parameters:
+        - name: word
+          in: path
+          required: true
+          description: |
+            The word to analyze, UTF-8 and percent-encoded.
+
+            A single word, matching `^['"א-ת]+$` — Hebrew letters
+            alef..tav (finals included), plus the ASCII apostrophe and quote
+            that stand in for geresh and gershayim in acronyms (`צה"ל`),
+            abbreviations (`וכו'`), loanword affricates (`ג'ינס`) and gimatria
+            numerals (`י"ד`). Every entry in the dictionary is built from
+            exactly these characters.
+
+            Anything else is a `400`: niqqud and cantillation, Latin letters,
+            digits, whitespace, and punctuation. Lookup is an exact string
+            match, so the caller must strip niqqud and convert defective ktiv
+            haser spelling to ktiv male (כתיב מלא) first.
+
+            Ktiv haser is not detectable this way, so `ספר` for `סֵפֶר` is
+            accepted and simply analyzed as written.
+          schema:
+            type: string
+            minLength: 1
+            pattern: "^['\"\\u05D0-\\u05EA]+$"
+          example: מלכה
+      responses:
+        "200":
+          description: |
+            The analysis. A word the dictionary does not recognize is not an
+            error; it comes back with an empty `splits` list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+        "400":
+          description: |
+            The word contains a character the dictionary cannot hold. The
+            message names the offending character; for niqqud it also suggests
+            the undotted form to send instead.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    Error:
+      type: object
+      description: A rejected request.
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Human-readable explanation of what was wrong.
+          example: >-
+            word contains niqqud or cantillation (U+05B7); the dictionary
+            holds only undotted ktiv male forms, so send "מלכה" instead
+
+    Analysis:
+      type: object
+      description: The result of analyzing one word.
+      x-go-type: hebmorph.Analysis
+      x-go-type-import:
+        path: hebmorph
+      required: [word, exists, splits]
+      properties:
+        word:
+          type: string
+          description: The word as given.
+        exists:
+          type: boolean
+          description: Whether the word is recognized.
+        gimatria:
+          type: integer
+          description: |
+            Numeric value, set only when the word is a canonical Hebrew
+            numeral (e.g. `י"ד` → 14).
+
+            Known limitation: numerals built from a multi-rune digit — the
+            hundreds תק/תר/תש/תת/תתק and the specials טו/טז — are not currently
+            recognized, so 15, 16 and everything from 500 up is omitted.
+          example: 14
+        splits:
+          type: array
+          description: Every way the word divides into a prefix and a base.
+          items:
+            $ref: "#/components/schemas/Split"
+
+    Split:
+      type: object
+      description: One way to divide the word into a prefix and a base word.
+      x-go-type: hebmorph.Split
+      x-go-type-import:
+        path: hebmorph
+      required: [prefix, base, whole_word, readings]
+      properties:
+        prefix:
+          type: string
+        base:
+          type: string
+        whole_word:
+          type: boolean
+          description: True when there is no prefix.
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reading"
+
+    Reading:
+      type: object
+      description: One morphological interpretation of a base word.
+      x-go-type: hebmorph.Reading
+      x-go-type-import:
+        path: hebmorph
+      required: [stem, desc, features]
+      properties:
+        stem:
+          type: string
+          description: The dictionary form.
+        desc:
+          type: string
+          description: Native hspell notation, e.g. "פ,נ,3,יחיד,עבר".
+          example: פ,נ,3,יחיד,עבר
+        features:
+          $ref: "#/components/schemas/Features"
+
+    Features:
+      type: object
+      description: The decoded, language-neutral morphology of a reading.
+      x-go-type: hebmorph.Features
+      x-go-type-import:
+        path: hebmorph
+      properties:
+        part_of_speech:
+          type: string
+          enum: [noun, verb, adjective]
+        gender:
+          type: string
+          enum: [masculine, feminine]
+        person:
+          type: string
+          enum: ["1", "2", "3"]
+        number:
+          type: string
+          enum: [singular, dual, plural]
+        tense:
+          type: string
+          enum: [past, present, future, imperative, infinitive]
+        construct:
+          type: boolean
+          description: Construct state (סמיכות).
+        proper_noun:
+          type: boolean
+          description: Proper noun (שם פרטי).
+        possessive:
+          $ref: "#/components/schemas/Possessive"
+
+    Possessive:
+      type: object
+      description: A pronominal (possessive/object) suffix.
+      x-go-type: hebmorph.Possessive
+      x-go-type-import:
+        path: hebmorph
+      properties:
+        gender:
+          type: string
+          enum: [masculine, feminine]
+        person:
+          type: string
+          enum: ["1", "2", "3"]
+        number:
+          type: string
+          enum: [singular, dual, plural]
