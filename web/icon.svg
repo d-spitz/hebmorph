@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="hebmorph">
+  <title>hebmorph</title>
+
+  <!-- A word, and the two parts it decomposes into. The narrow block sits on
+       the right because Hebrew prefixes attach at the right-hand edge. -->
+
+  <!-- the whole word -->
+  <rect x="6" y="5" width="20" height="6.5" rx="3.25" fill="#2f9e7e"/>
+
+  <!-- it divides -->
+  <path d="M16 11.5V15M9 15h14M9 15v4M23 15v4"
+        fill="none" stroke="#2f9e7e" stroke-opacity=".5"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- base -->
+  <rect x="3" y="19" width="12" height="7" rx="3.5" fill="#2f9e7e"/>
+  <!-- prefix -->
+  <rect x="18" y="19" width="10" height="7" rx="3.5" fill="#2f9e7e" fill-opacity=".45"/>
+</svg>

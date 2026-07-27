@@ -117,13 +117,47 @@ func TestServesSpec(t *testing.T) {
 	get(t, s.URL+"/api/v1/openapi.yaml")
 }
 
-// TestCORS guards the header the browser portal depends on. Without it the
-// static site fails with an opaque network error, not a readable status.
+// TestCORS guards the header browser clients depend on. Without it a page on
+// another origin fails with an opaque network error, not a readable status.
 func TestCORS(t *testing.T) {
 	s := newServer(t)
 	res := get(t, s.URL+"/api/v1/analyze/%D7%9E%D7%9C%D7%9B%D7%94")
 	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "*")
+	}
+}
+
+// TestCORSPreflight covers the OPTIONS a browser sends ahead of any request
+// carrying a custom header. The mux knows only GET and answers 405, so the
+// preflight has to be handled before it.
+func TestCORSPreflight(t *testing.T) {
+	s := newServer(t)
+
+	req, err := http.NewRequest(http.MethodOptions, s.URL+"/api/v1/analyze/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "https://example.github.io")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "x-example")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", res.StatusCode)
+	}
+	for header, want := range map[string]string{
+		"Access-Control-Allow-Origin":  "*",
+		"Access-Control-Allow-Methods": "GET, OPTIONS",
+		"Access-Control-Allow-Headers": "x-example",
+	} {
+		if got := res.Header.Get(header); got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
 	}
 }
 

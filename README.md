@@ -109,6 +109,23 @@ parallel copies — the spec documents the payload without introducing a mapping
 layer to keep in sync. The only hand-written code is the handler in
 [`api/server.go`](api/server.go), which calls `Analyze` and returns the result.
 
+Responses carry `Access-Control-Allow-Origin: *` so browsers on other origins
+can read them — the web portal below is served from GitHub Pages, so every call
+it makes is cross-origin.
+
+## Web portal
+
+[`web/`](web/) is a static reader: paste Hebrew text, then tap any word for its
+analysis. Texts live in `localStorage`, so there is no database and no account.
+
+Three files, no dependencies, no build step: `index.html`, `styles.css`, and
+about 200 lines of `app.js`. Open `web/index.html` directly, or let
+[the workflow](.github/workflows/pages.yml) publish it to GitHub Pages on push
+to `main` (Settings → Pages → Source → "GitHub Actions").
+
+The portal normalizes before querying — stripping niqqud and folding typographic
+geresh/gershayim to ASCII — so pointed text does not simply 400.
+
 ## Design
 
 - **UTF-8 throughout.** The dictionary is stored in UTF-8 and the analysis walks
@@ -133,6 +150,7 @@ Source files:
 | `prefixes_data.go` | generated legal-prefix table                           |
 | `api/openapi.yaml` | HTTP API spec; `api/api.gen.go` is generated from it   |
 | `api/server.go`    | the handler behind the generated routing               |
+| `web/`             | static reader portal (vanilla JS + localStorage)       |
 
 ## Regenerating the dictionary
 

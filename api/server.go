@@ -101,11 +101,27 @@ func NewHandler(a *hebmorph.Analyzer) http.Handler {
 // cross-origin. The API is public, read-only and unauthenticated, so there is
 // nothing to protect with an origin allowlist.
 //
-// These are simple GET requests carrying no custom headers or credentials, so
-// they are never preflighted and no OPTIONS handling is needed.
+// A bare GET would be a "simple" request and go straight through, but a client
+// that sets any custom header (htmx tags its requests with HX-*) makes it
+// non-simple, and the browser sends a preflight OPTIONS first. That has to be
+// answered here: the wrapper sits outside the mux, which knows only GET and
+// would reject OPTIONS with 405.
 func allowCrossOrigin(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			// Nothing is read off request headers, so whatever the client
+			// proposes is safe to allow.
+			if want := r.Header.Get("Access-Control-Request-Headers"); want != "" {
+				w.Header().Set("Access-Control-Allow-Headers", want)
+				w.Header().Add("Vary", "Access-Control-Request-Headers")
+			}
+			w.Header().Set("Access-Control-Max-Age", "86400")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		h.ServeHTTP(w, r)
 	})
 }

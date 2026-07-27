@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hebmorph</title>
+<meta name="description" content="A reader for Hebrew text: paste a passage, then hover or tap any word to see how it breaks into prefix and base, and every way that base can be read — part of speech, gender, number, tense and more.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<link rel="preconnect" href="https://hebmorph.onrender.com">
+<script defer src="app.js"></script>
+</head>
+
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <button id="nav-toggle" class="icon-btn" aria-controls="sidebar" aria-expanded="false">
+    <span class="sr-only">Toggle saved texts</span>
+    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <a class="brand" href="#/">hebmorph</a>
+</header>
+
+<div class="layout">
+
+  <aside id="sidebar" class="sidebar">
+    <a class="new-btn" href="#/">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      New text
+    </a>
+    <nav aria-label="Saved texts">
+      <ul id="text-list" class="text-list"></ul>
+    </nav>
+    <p class="sidebar-foot">Saved in this browser only.</p>
+  </aside>
+
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+
+    <section id="view-new" class="view">
+      <h1>Paste Hebrew text</h1>
+      <p class="lede">Then hover or tap any word to see how it breaks down. Your
+        texts stay in this browser — nothing is uploaded.</p>
+      <form id="new-form">
+        <label class="sr-only" for="new-text">Hebrew text</label>
+        <textarea id="new-text" dir="rtl" lang="he" rows="9" required
+          placeholder="הדביקו כאן טקסט בעברית…"></textarea>
+        <button class="btn-primary" type="submit">Save &amp; read</button>
+      </form>
+    </section>
+
+    <article id="view-read" class="view" hidden>
+      <h1 id="read-title" dir="auto"></h1>
+      <div id="read-body" class="prose" dir="rtl" lang="he"></div>
+    </article>
+
+  </main>
+
+</div>
+
+<!-- Anchored to whichever word is active; see .pop in styles.css. -->
+<div id="pop" popover="auto" class="pop">
+  <div class="pop-head">
+    <span id="pop-word" class="pop-word" dir="rtl" lang="he"></span>
+  </div>
+  <div id="pop-body" class="pop-body" aria-live="polite"></div>
+</div>
+
+</body>
+</html>
