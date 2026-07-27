@@ -89,7 +89,10 @@ h1, h2 { line-height: 1.2; text-wrap: balance; }
   align-items: start;
   min-block-size: calc(100svh - var(--topbar-h));
 }
-body:not(.nav-open) .layout { grid-template-columns: 0 minmax(0, 1fr); }
+/* Collapsed: one column, not a 0-width one. The sidebar is display:none here,
+   so it stops being a grid item — leaving a leading 0 track would auto-place
+   main into it and crush the text to nothing. */
+body:not(.nav-open) .layout { grid-template-columns: minmax(0, 1fr); }
 
 /* ---------- sidebar ---------- */
 
