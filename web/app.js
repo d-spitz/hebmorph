@@ -253,10 +253,12 @@ function place(word) {
   pop.style.left = `${Math.max(4, Math.min(ideal, innerWidth - p.width - 4))}px`;
 }
 
-// popover="auto" gives Escape and click-outside dismissal for free; this keeps
-// our own state in step when the browser closes it. The event is dispatched
-// asynchronously, so by the time it lands the popover may already have been
-// reopened for another word — leave those alone.
+// Deliberately popover="manual". An auto popover light-dismisses on
+// pointerdown, so by the time a click lands the popover has already closed —
+// leaving no way to tell "clicked the open word" from "clicked a new one".
+// Owning dismissal keeps that decision unambiguous. The event still fires on
+// our own show/hide, and is dispatched asynchronously, so ignore a close that
+// something has already reopened.
 pop.addEventListener('toggle', (e) => {
   if (e.newState === 'open' || pop.matches(':popover-open')) return;
   pinned = false;
@@ -267,7 +269,17 @@ const readBody = $('#read-body');
 
 readBody.addEventListener('click', (e) => {
   const word = e.target.closest('.w');
-  if (word) openPop(word, true); // pinned until dismissed
+  if (!word) return;
+  // Clicking the word it is already pinned to closes it; clicking a word the
+  // pointer merely opened by hovering pins it instead.
+  if (word === active && pinned && pop.matches(':popover-open')) closePop();
+  else openPop(word, true);
+});
+
+// The dismissal an auto popover would have given us.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.w') || e.target.closest('#pop')) return;
+  closePop();
 });
 
 if (CAN_HOVER.matches) {
@@ -354,7 +366,9 @@ $('#nav-toggle').addEventListener('click', () => {
 $('#scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') document.body.classList.remove('nav-open');
+  if (e.key !== 'Escape') return;
+  document.body.classList.remove('nav-open');
+  closePop(); // manual popovers do not dismiss themselves
 });
 
 /* ---------- start ---------- */
