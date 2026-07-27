@@ -150,7 +150,7 @@ textarea {
   font-family: var(--font-he); font-size: 1.05rem; line-height: 1.8;
   background: var(--surface); color: var(--text);
   border: 1px solid var(--line); border-radius: var(--radius);
-  resize: vertical;
+  resize: none;
 }
 textarea:focus-visible { border-color: var(--accent); }
 
