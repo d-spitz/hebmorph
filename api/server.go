@@ -93,5 +93,19 @@ func NewHandler(a *hebmorph.Analyzer) http.Handler {
 		w.Header().Set("Content-Type", "application/yaml")
 		w.Write(spec)
 	})
-	return mux
+	return allowCrossOrigin(mux)
+}
+
+// allowCrossOrigin lets browser clients on other origins read the API — the
+// static web portal is served from GitHub Pages, so every call it makes is
+// cross-origin. The API is public, read-only and unauthenticated, so there is
+// nothing to protect with an origin allowlist.
+//
+// These are simple GET requests carrying no custom headers or credentials, so
+// they are never preflighted and no OPTIONS handling is needed.
+func allowCrossOrigin(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		h.ServeHTTP(w, r)
+	})
 }

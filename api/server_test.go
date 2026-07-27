@@ -117,6 +117,16 @@ func TestServesSpec(t *testing.T) {
 	get(t, s.URL+"/api/v1/openapi.yaml")
 }
 
+// TestCORS guards the header the browser portal depends on. Without it the
+// static site fails with an opaque network error, not a readable status.
+func TestCORS(t *testing.T) {
+	s := newServer(t)
+	res := get(t, s.URL+"/api/v1/analyze/%D7%9E%D7%9C%D7%9B%D7%94")
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "*")
+	}
+}
+
 func mustJSON(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)
