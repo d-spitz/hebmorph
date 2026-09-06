@@ -252,6 +252,9 @@ textarea:focus-visible { border-color: var(--accent); }
 .reading { padding: .6rem .7rem; background: var(--surface-2); border-radius: 8px; }
 .stem { font-family: var(--font-he); font-size: 1.05rem; font-weight: 600; }
 
+/* English senses, directly under the Hebrew stem they translate. */
+.glosses { margin-block-start: .1rem; font-size: .82rem; color: var(--text); }
+
 .tags { display: flex; flex-wrap: wrap; gap: .25rem; margin-block: .4rem .35rem; }
 .tag {
   padding: .1rem .45rem; border-radius: 999px;

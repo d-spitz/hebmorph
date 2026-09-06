@@ -102,8 +102,14 @@ function readingHTML(r) {
   const desc = r.desc && r.desc !== 'x'
     ? `<div class="desc" dir="rtl" lang="he">${esc(r.desc)}</div>`
     : '';
+  // English senses of the stem, in this reading's part of speech. Absent for
+  // proper nouns and the handful of stems still untranslated.
+  const glosses = r.glosses && r.glosses.length
+    ? `<div class="glosses" dir="ltr" lang="en">${r.glosses.map(esc).join(', ')}</div>`
+    : '';
   return `<li class="reading">
       <div class="stem" dir="rtl" lang="he">${esc(r.stem)}</div>
+      ${glosses}
       ${tags ? `<div class="tags">${tags}</div>` : NO_FEATURES}
       ${desc}
     </li>`;
