@@ -31,7 +31,8 @@ type dictionary struct {
 	index    map[string]int32 // word -> position in words
 	specs    []byte           // prefix specifier per word
 	readings [][]reading
-	glosses  map[int32][]glossGroup // stem word index -> English translations
+	glosses  map[int32][]glossGroup // lemma word index -> English translations
+	miscStem int32                  // index of hspell's catch-all stem, or -1
 }
 
 func loadDictionary() (*dictionary, error) {

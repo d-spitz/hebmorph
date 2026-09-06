@@ -154,7 +154,7 @@ func (a *Analyzer) readingsOf(base []rune, prefixMask int) []Reading {
 			Stem:     a.dict.words[rd.stemIndex],
 			Desc:     hebrewDesc(dmask),
 			Features: decodeFeatures(dmask),
-			Glosses:  a.dict.glossesOf(rd.stemIndex, dmask),
+			Glosses:  a.dict.glossesOf(i, rd.stemIndex, dmask),
 		})
 	}
 	return out

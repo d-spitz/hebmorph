@@ -32,40 +32,72 @@ func TestGlossesFollowPartOfSpeech(t *testing.T) {
 	}
 }
 
+// TestGlossesFollowLemma covers hspell's catch-all words, which are keyed by
+// themselves rather than by a stem. אדם carries both kinds at once, in the
+// same part of speech, so it is the case that proves the flag works.
+func TestGlossesFollowLemma(t *testing.T) {
+	a := newAnalyzer(t)
+	for _, want := range []struct {
+		word, gloss string
+		proper      bool
+	}{
+		{"אדם", "man", false},   // through its stem
+		{"אדם", "Adam", true},   // through the catch-all
+		{"צה\"ל", "IDF", true},  // only the catch-all
+		{"עכשיו", "now", false}, // a particle, no part of speech at all
+	} {
+		var got []string
+		for _, r := range a.Analyze(want.word).Splits[0].Readings {
+			if r.Features.ProperNoun == want.proper {
+				got = r.Glosses
+				break
+			}
+		}
+		if !slices.Contains(got, want.gloss) {
+			t.Errorf("%q (proper_noun=%v): glosses = %q, want them to include %q",
+				want.word, want.proper, got, want.gloss)
+		}
+	}
+}
+
 // TestGlossCoverage checks that the embedded table still covers nearly every
-// stem, so a half-finished regeneration cannot ship unnoticed.
+// lemma, so a half-finished regeneration cannot ship unnoticed.
 func TestGlossCoverage(t *testing.T) {
 	a := newAnalyzer(t)
 
-	stems := map[int32]bool{}
-	for _, rs := range a.dict.readings {
+	lemmas := map[int32]bool{}
+	for word, rs := range a.dict.readings {
 		for _, r := range rs {
-			stems[r.stemIndex] = true
+			lemma := r.stemIndex
+			if lemma == a.dict.miscStem {
+				lemma = int32(word)
+			}
+			lemmas[lemma] = true
 		}
 	}
 	translated := 0
-	for stem := range stems {
-		if len(a.dict.glosses[stem]) > 0 {
+	for lemma := range lemmas {
+		if len(a.dict.glosses[lemma]) > 0 {
 			translated++
 		}
 	}
 
 	const wantAtLeast = 0.99
-	if got := float64(translated) / float64(len(stems)); got < wantAtLeast {
-		t.Errorf("gloss coverage = %.1f%% (%d of %d stems), want at least %.0f%%",
-			100*got, translated, len(stems), 100*wantAtLeast)
+	if got := float64(translated) / float64(len(lemmas)); got < wantAtLeast {
+		t.Errorf("gloss coverage = %.1f%% (%d of %d lemmas), want at least %.0f%%",
+			100*got, translated, len(lemmas), 100*wantAtLeast)
 	}
 }
 
-// TestGlossesUnknownStem covers the lookup's empty cases: an index with no
+// TestGlossesUnknownLemma covers the lookup's empty cases: an index with no
 // entry, and an entry with no group for the reading's part of speech.
-func TestGlossesUnknownStem(t *testing.T) {
+func TestGlossesUnknownLemma(t *testing.T) {
 	a := newAnalyzer(t)
-	if got := a.dict.glossesOf(-1, dNoun); got != nil {
+	if got := a.dict.glossesOf(-1, -1, dNoun); got != nil {
 		t.Errorf("glossesOf(-1) = %q, want nil", got)
 	}
 	queen := a.dict.index["מלכה"]
-	if got := a.dict.glossesOf(queen, dVerb); got != nil {
+	if got := a.dict.glossesOf(queen, queen, dVerb); got != nil {
 		t.Errorf("glossesOf(מלכה, verb) = %q, want nil — it is only a noun", got)
 	}
 }

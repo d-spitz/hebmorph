@@ -5,7 +5,8 @@ package hebmorph
 //
 //go:generate go run ./internal/gen -src internal/gen/source -out data/hebrew.dict.gz
 
-// Regenerate the embedded English gloss table from the verified translation
-// set. It joins on stem text, so it runs after the dictionary above.
+// Regenerate the embedded English gloss table from the two verified
+// translation sets. It joins on Hebrew text, so it runs after the dictionary
+// above.
 //
-//go:generate go run ./internal/gen/translations -src internal/gen/translate/translations.verified.jsonl -dict data/hebrew.dict.gz -out data/translations.gz
+//go:generate go run ./internal/gen/translations -stems internal/gen/translate/translations.verified.jsonl -misc internal/gen/translate/misc.verified.jsonl -dict data/hebrew.dict.gz -out data/translations.json.gz
