@@ -36,6 +36,11 @@ type Reading struct {
 	Stem     string   `json:"stem"`
 	Desc     string   `json:"desc"` // native hspell notation, e.g. "פ,נ,3,יחיד,עבר"
 	Features Features `json:"features"`
+	// Glosses are the stem's English translations in this reading's part of
+	// speech, most representative sense first. It is empty when the stem has
+	// no translation for that part of speech. The slice is shared between
+	// analyses and must not be modified.
+	Glosses []string `json:"glosses,omitempty"`
 }
 
 // prefixEntry is a legal prefix and the specifier mask it supplies. The
@@ -149,6 +154,7 @@ func (a *Analyzer) readingsOf(base []rune, prefixMask int) []Reading {
 			Stem:     a.dict.words[rd.stemIndex],
 			Desc:     hebrewDesc(dmask),
 			Features: decodeFeatures(dmask),
+			Glosses:  a.dict.glossesOf(rd.stemIndex, dmask),
 		})
 	}
 	return out

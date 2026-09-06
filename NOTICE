@@ -15,4 +15,11 @@ from the original files kept under internal/gen/source/), hebmorph as a whole is
 likewise licensed under the AGPL version 3. See the LICENSE file for the full
 license text.
 
+The English gloss table under data/translations.gz is not Hspell data. It was
+generated for this project by running DictaLM-3.0-Nemotron-12B-Instruct (Dicta,
+the Israel Center for Text Analysis, https://dicta.org.il) locally over the
+dictionary's stems, and reviewed and corrected by Google Gemini. It is keyed to
+Hspell's stems and distributed as part of hebmorph, under the same AGPL version
+3. It is machine-generated and carries no correctness guarantee.
+
 There is no warranty of any kind for the contents of this distribution.

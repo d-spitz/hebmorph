@@ -7,7 +7,9 @@ state, and pronominal suffix).
 
 It is a modern, UTF-8-native rewrite of the analysis core of
 [hspell](http://hspell.ivrix.org.il). The dictionary (≈342k words) is embedded
-in the binary, so there is nothing to install or ship alongside it.
+in the binary, so there is nothing to install or ship alongside it. Each reading
+also carries English glosses for its stem, so an analysis says what the word
+means as well as how it is built.
 
 ## Library
 
@@ -51,7 +53,8 @@ Example (`-pretty`, trimmed):
           "features": {
             "part_of_speech": "verb", "gender": "feminine",
             "person": "3", "number": "singular", "tense": "past"
-          }
+          },
+          "glosses": ["to reign", "to rule"]
         }
       ]
     },
@@ -113,6 +116,39 @@ Responses carry `Access-Control-Allow-Origin: *` so browsers on other origins
 can read them — the web portal below is served from GitHub Pages, so every call
 it makes is cross-origin.
 
+## English glosses
+
+Every reading carries `glosses`, the English senses of its stem:
+
+```json
+{ "stem": "מלך", "desc": "פ,נ,3,יחיד,עבר", "features": { "part_of_speech": "verb", ... },
+  "glosses": ["to reign", "to rule"] }
+```
+
+Translation is **per stem and part of speech**, not per inflected form. The 342k
+words collapse onto 20,917 stems, and tense, person and number do not change
+what a word means, so the table only has to hold a sense set per stem — 263 KB
+gzipped against the dictionary's 2.5 MB. Part of speech does matter: 1,153 stems
+are attested under more than one, and `מלך` means "to reign" as a verb and
+"king" as a noun. So each reading is answered with the glosses of its own part
+of speech, which is why the two readings of `מלכה` below the same stem come back
+with different English:
+
+```sh
+curl -s http://localhost:8080/api/v1/analyze/מלכה | jq '.splits[0].readings[] | {desc, glosses}'
+# {"desc":"פ,נ,3,יחיד,עבר","glosses":["to reign","to rule"]}   verb
+# {"desc":"ע,נ,יחיד","glosses":["queen"]}                      noun (stem מלכה)
+# {"desc":"ע,ז,יחיד,כינוי/נ,3,יחיד","glosses":["king"]}        noun (stem מלך)
+```
+
+The field is omitted when a stem has no gloss for the reading's part of speech.
+All 20,917 stems are currently translated; a `TestGlossCoverage` guard fails the
+build if a regeneration drops below 99%.
+
+The glosses are machine-generated and machine-verified, not lexicographer-
+written — see [Provenance & correctness](#provenance--correctness). They are
+meant as a reading aid, not as a dictionary of record.
+
 ## Web portal
 
 [`web/`](web/) is a static reader: paste Hebrew text, then tap any word for its
@@ -135,8 +171,11 @@ geresh/gershayim to ASCII — so pointed text does not simply 400.
   of MB and lookups are `map` hits (~ns). SQLite/FST would add a dependency and
   memory-mapping complexity for no measurable benefit at this size, so they were
   deliberately not used.
-- **Embedded data.** `data/hebrew.dict.gz` (~2.5 MB) is embedded via `go:embed`;
-  the binary is self-contained.
+- **Embedded data.** `data/hebrew.dict.gz` (~2.5 MB) and `data/translations.gz`
+  (~263 KB) are embedded via `go:embed`; the binary is self-contained.
+- **Glosses keyed by stem index.** The translation table reuses the word index
+  a reading already carries in `stemIndex`, so attaching English to a reading is
+  one map hit and no string work.
 
 Source files:
 
@@ -147,33 +186,43 @@ Source files:
 | `features.go`      | dmask → `Features`, native Hebrew description, specifier|
 | `gimatria.go`      | canonical Hebrew-numeral recognition                   |
 | `data.go`          | embedded dictionary decode + lookup                    |
+| `translations.go`  | embedded gloss table decode + per-POS stem lookup      |
 | `prefixes_data.go` | generated legal-prefix table                           |
 | `api/openapi.yaml` | HTTP API spec; `api/api.gen.go` is generated from it   |
 | `api/server.go`    | the handler behind the generated routing               |
 | `web/`             | static reader portal (vanilla JS + localStorage)       |
 
-## Regenerating the dictionary
+## Regenerating the embedded data
 
-The embedded blob is generated from hspell's original data files (kept under
-`internal/gen/source/` for provenance):
+Both blobs are built by `go generate`, in order — the gloss table joins on stem
+text, so the dictionary has to exist first:
 
 ```sh
 go generate ./...
 # == go run ./internal/gen -src internal/gen/source -out data/hebrew.dict.gz
+# && go run ./internal/gen/translations \
+#      -src internal/gen/translate/translations.verified.jsonl \
+#      -dict data/hebrew.dict.gz -out data/translations.gz
 ```
+
+The dictionary comes from hspell's original data files, the glosses from the
+verified translation set; both sources are kept under `internal/gen/` for
+provenance. The translation step reports coverage and drops any gloss whose part
+of speech the stem has no reading in — nothing could carry it.
 
 ## Optional: SQLite export
 
 For deploying the dictionary as a database, an exporter builds a modern SQLite
-file from the same blob (the `hebmorph` package itself has no SQLite
+file from the same two blobs (the `hebmorph` package itself has no SQLite
 dependency):
 
 ```sh
 go run ./internal/gen/sqlite | sqlite3 dist/hebrew.db
 ```
 
-The result uses `STRICT` tables, a `WITHOUT ROWID` readings table, foreign keys,
-`user_version`, and a convenience view:
+The result uses `STRICT` tables, `WITHOUT ROWID` where the natural key is the
+whole row, foreign keys, `user_version` (2 — 1 was the dictionary without
+glosses), and two convenience views:
 
 ```sql
 CREATE TABLE words (
@@ -190,19 +239,37 @@ CREATE TABLE readings (
   PRIMARY KEY (word_id, seq)
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE glosses (
+  stem_id INTEGER NOT NULL REFERENCES words(id),
+  pos     INTEGER NOT NULL,                    -- dmask & 3: 1 noun, 2 verb, 3 adjective
+  seq     INTEGER NOT NULL,                    -- sense order, most representative first
+  english TEXT    NOT NULL,
+  PRIMARY KEY (stem_id, pos, seq)
+) STRICT, WITHOUT ROWID;
+
 CREATE VIEW readings_view AS                   -- readings with resolved text
-  SELECT r.word_id, w.word AS word, r.seq, s.word AS stem, r.dmask
+  SELECT r.word_id, w.word AS word, r.seq, r.stem_id, s.word AS stem, r.dmask
   FROM readings r JOIN words w ON w.id = r.word_id JOIN words s ON s.id = r.stem_id;
+
+CREATE VIEW glosses_view AS                    -- glosses with resolved stem text
+  SELECT g.stem_id, s.word AS stem, g.pos, g.seq, g.english
+  FROM glosses g JOIN words s ON s.id = g.stem_id;
 ```
 
 ```sh
 sqlite3 dist/hebrew.db "SELECT word, stem, dmask FROM readings_view WHERE word='מלכה';"
+
+# a reading and its English, the same match the Go analyzer makes
+sqlite3 dist/hebrew.db "
+  SELECT r.word, r.stem, g.english FROM readings_view r
+    JOIN glosses g ON g.stem_id = r.stem_id AND g.pos = r.dmask & 3
+    WHERE r.word = 'מלכה';"
 ```
 
 Note the `readings` table holds every reading of a word; an application applies
 the prefix-specifier filter (see `prefixSpecifier`) itself, exactly as the Go
 analyzer does. `dmask` can be decoded with the same bit layout as the package's
-`Features`.
+`Features`, and its low two bits are the `pos` that joins to `glosses`.
 
 ## Tests & benchmarks
 
@@ -220,6 +287,22 @@ The analyzer is a port of Hspell 1.4. Its JSON output was verified to be
 **byte-for-byte identical** to the verified reference port across all 341,585
 dictionary words, and Hspell's own C output was reproduced exactly in that
 reference (see the sibling `hspell-1.4` project).
+
+The **glosses have a weaker guarantee** and are held separately from the
+morphology for exactly that reason: nothing about the analysis depends on them.
+They were drafted by [DictaLM-3.0-Nemotron-12B-Instruct](https://huggingface.co/dicta-il/DictaLM-3.0-Nemotron-12B-Instruct)
+— the Hebrew-specialized model from [Dicta](https://dicta.org.il), the Israel
+Center for Text Analysis — run locally over all 20,917 stems, each stem given
+its attested parts of speech and one inflected form as grounding. Every draft
+gloss was then reviewed by **Google Gemini** in a second pass, which corrected
+the senses it judged wrong; `internal/gen/translate/translations.verified.jsonl`
+is that reviewed set, and the only input the embedded table is built from.
+
+That is machine drafting checked by machine review, not lexicography. It is good
+enough to read with and wrong often enough that it should not be cited. Errors
+of the kind the review pass exists to catch are real: `אימת` was first glossed
+"to frighten" (the unrelated root א־י־ם) rather than "to verify" (א־מ־ת, *emet*,
+truth). Corrections belong in the verified set, followed by `go generate ./...`.
 
 ## License & credits
 

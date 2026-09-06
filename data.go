@@ -31,6 +31,7 @@ type dictionary struct {
 	index    map[string]int32 // word -> position in words
 	specs    []byte           // prefix specifier per word
 	readings [][]reading
+	glosses  map[int32][]glossGroup // stem word index -> English translations
 }
 
 func loadDictionary() (*dictionary, error) {
@@ -90,6 +91,9 @@ func loadDictionary() (*dictionary, error) {
 		d.specs[i] = spec
 		d.readings[i] = rs
 		d.index[string(w)] = int32(i)
+	}
+	if err := d.loadGlosses(); err != nil {
+		return nil, err
 	}
 	return d, nil
 }

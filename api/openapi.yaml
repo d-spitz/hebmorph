@@ -148,6 +148,19 @@ components:
           example: פ,נ,3,יחיד,עבר
         features:
           $ref: "#/components/schemas/Features"
+        glosses:
+          type: array
+          description: |
+            English translations of the stem, in this reading's part of
+            speech, most representative sense first. Translation is per stem
+            and part of speech, not per inflected form, so every reading of
+            `מלך` as a verb glosses as "to reign" and every reading of it as a
+            noun as "king".
+
+            Omitted when the stem has no translation for that part of speech.
+          items:
+            type: string
+          example: [to reign, to rule]
 
     Features:
       type: object
