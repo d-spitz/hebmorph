@@ -186,6 +186,25 @@ textarea:focus-visible { border-color: var(--accent); }
 }
 .w:hover { background: var(--soft); }
 .w.is-active { background: var(--accent); color: var(--accent-in); }
+/* Already in the glossary — clicking again takes it back out. */
+.w.is-collected { text-decoration: underline .1em var(--accent); text-underline-offset: .25em; }
+
+/* ---------- glossary ---------- */
+
+.glossary { margin-block-start: 2.5rem; padding-block-start: 1.25rem; border-block-start: 1px solid var(--line); }
+
+.gloss-head { display: flex; align-items: center; gap: 1rem; margin-block-end: .75rem; }
+.gloss-head h2 { font-size: 1rem; font-weight: 600; margin-inline-end: auto; }
+
+.btn-ghost:disabled { opacity: .5; cursor: default; border-color: var(--line); }
+
+.gloss-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.gloss-item { display: flex; align-items: baseline; gap: .75rem; padding-block: .4rem; }
+.gloss-item + .gloss-item { border-block-start: 1px solid var(--line); }
+
+.gloss-word { font-family: var(--font-he); font-size: 1.05rem; font-weight: 600; flex-shrink: 0; }
+.gloss-sense { flex: 1; font-size: .85rem; color: var(--muted); }
 
 /* ---------- analysis popover ---------- */
 

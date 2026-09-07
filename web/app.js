@@ -3,6 +3,7 @@
 
 const API = 'https://hebmorph.onrender.com/api/v1/analyze';
 const KEY = 'hebmorph.texts';
+const GLOSS_KEY = 'hebmorph.glossary';
 const DESKTOP = '(min-width: 900px)';
 const $ = (sel) => document.querySelector(sel);
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) =>
@@ -16,6 +17,30 @@ const loadAll = () => {
 const saveAll = (list) => localStorage.setItem(KEY, JSON.stringify(list));
 const titleOf = (text) => text.trim().split('\n')[0].slice(0, 42) || 'Untitled';
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+/* { [textId]: { [word]: { added, data } } }. The analysis is kept with the
+   word so the list and the export never ask the API again. */
+const loadGloss = () => {
+  try { return JSON.parse(localStorage.getItem(GLOSS_KEY)) || {}; } catch { return {}; }
+};
+const saveGloss = (all) => localStorage.setItem(GLOSS_KEY, JSON.stringify(all));
+const glossOf = (id) => loadGloss()[id] || {};
+
+function addToGloss(id, word, data) {
+  const all = loadGloss();
+  const entries = (all[id] ||= {});
+  if (entries[word]) return false;
+  entries[word] = { added: Date.now(), data };
+  saveGloss(all);
+  return true;
+}
+
+function removeFromGloss(id, word) {
+  const all = loadGloss();
+  if (!all[id]) return;
+  delete all[id][word];
+  saveGloss(all);
+}
 
 /* ---------- words ----------
    The API takes only Hebrew letters plus ' and " (geresh and gershayim) and
@@ -70,21 +95,28 @@ function renderText(host, text) {
 
 /* ---------- analysis markup ---------- */
 
-function featureTags(f = {}) {
-  const tag = (text, cls = 'tag') => `<span class="${cls}">${esc(text)}</span>`;
+// Plain words, so the popover can tag them and the export can write them.
+function featureList(f = {}) {
   const out = [];
-  if (f.part_of_speech) out.push(tag(f.part_of_speech, 'tag tag-pos'));
-  if (f.gender) out.push(tag(f.gender));
-  if (f.number) out.push(tag(f.number));
-  if (f.person) out.push(tag(`person ${f.person}`));
-  if (f.tense) out.push(tag(f.tense));
-  if (f.construct) out.push(tag('construct'));
-  if (f.proper_noun) out.push(tag('proper noun'));
+  if (f.part_of_speech) out.push(f.part_of_speech);
+  if (f.gender) out.push(f.gender);
+  if (f.number) out.push(f.number);
+  if (f.person) out.push(`person ${f.person}`);
+  if (f.tense) out.push(f.tense);
+  if (f.construct) out.push('construct');
+  if (f.proper_noun) out.push('proper noun');
   if (f.possessive) {
     const { gender, person, number } = f.possessive;
-    out.push(tag(`suffix · ${[gender, person, number].filter(Boolean).join(' ')}`));
+    out.push(`suffix · ${[gender, person, number].filter(Boolean).join(' ')}`);
   }
-  return out.join('');
+  return out;
+}
+
+function featureTags(f = {}) {
+  return featureList(f).map((text, i) => {
+    const cls = i === 0 && f.part_of_speech ? 'tag tag-pos' : 'tag';
+    return `<span class="${cls}">${esc(text)}</span>`;
+  }).join('');
 }
 
 // hspell files 1012 readings with no part of speech at all, across 68 stems:
@@ -157,13 +189,16 @@ async function analyze(word) {
       const err = await res.json().catch(() => null);
       body.innerHTML = `<p class="empty">${esc(
         (err && err.message) || `The analyzer returned ${res.status}.`)}</p>`;
-      return;
+      return null;
     }
-    body.innerHTML = analysisHTML(await res.json());
+    const data = await res.json();
+    body.innerHTML = analysisHTML(data);
+    return data;
   } catch (e) {
-    if (e.name === 'AbortError') return;
+    if (e.name === 'AbortError') return null;
     body.innerHTML = '<p class="empty">Could not reach the analyzer — ' +
       'it may be asleep. Try again in a moment.</p>';
+    return null;
   } finally {
     if (inflight === ctrl) inflight = null;
   }
@@ -202,7 +237,7 @@ function anchorTo(word) {
 
 // Switching words never closes and reopens — it re-anchors the open popover,
 // so there is no flicker and no stray toggle event.
-function openPop(word, byClick) {
+async function openPop(word, byClick, collect = byClick) {
   clearTimeout(openTimer);
   clearTimeout(closeTimer);
   pinned = byClick;
@@ -219,7 +254,14 @@ function openPop(word, byClick) {
 
   if (!pop.matches(':popover-open')) pop.showPopover();
   if (!CAN_ANCHOR) place(word);
-  analyze(word.dataset.word);
+
+  const data = await analyze(word.dataset.word);
+  // Only a click collects: hovering across a line must not fill the glossary
+  // with everything the pointer passed over.
+  if (collect && data && currentId && addToGloss(currentId, word.dataset.word, data)) {
+    renderGloss(currentId);
+    markCollected();
+  }
 }
 
 function closePop() {
@@ -276,10 +318,19 @@ const readBody = $('#read-body');
 readBody.addEventListener('click', (e) => {
   const word = e.target.closest('.w');
   if (!word) return;
+
+  // Clicking a word already in the glossary takes it back out.
+  const collected = !!currentId && !!glossOf(currentId)[word.dataset.word];
+  if (collected) {
+    removeFromGloss(currentId, word.dataset.word);
+    renderGloss(currentId);
+    markCollected();
+  }
+
   // Clicking the word it is already pinned to closes it; clicking a word the
   // pointer merely opened by hovering pins it instead.
   if (word === active && pinned && pop.matches(':popover-open')) closePop();
-  else openPop(word, true);
+  else openPop(word, true, !collected);
 });
 
 // The dismissal an auto popover would have given us.
@@ -305,6 +356,112 @@ if (CAN_HOVER.matches) {
   pop.addEventListener('mouseleave', scheduleClose);
 }
 
+/* ---------- glossary ---------- */
+
+const glossList = $('#gloss-list');
+const glossExport = $('#gloss-export');
+
+// The same sense usually turns up under several readings, so dedupe.
+function sensesOf(data) {
+  const seen = new Set();
+  for (const split of data.splits || []) {
+    for (const r of split.readings || []) {
+      for (const g of r.glosses || []) seen.add(g);
+    }
+  }
+  return [...seen];
+}
+
+// Underlines the collected words, so clicking one again to drop it reads as
+// undoing something rather than as nothing happening.
+function markCollected() {
+  const entries = currentId ? glossOf(currentId) : {};
+  for (const w of readBody.querySelectorAll('.w')) {
+    w.classList.toggle('is-collected', !!entries[w.dataset.word]);
+  }
+}
+
+// Newest first, so a word just clicked lands at the top.
+const glossEntries = (id) =>
+  Object.entries(glossOf(id)).sort((a, b) => b[1].added - a[1].added);
+
+function renderGloss(id) {
+  const entries = glossEntries(id);
+  glossExport.disabled = !entries.length;
+
+  if (!entries.length) {
+    glossList.innerHTML =
+      '<li class="empty">Click a word above to collect it here.</li>';
+    return;
+  }
+
+  glossList.innerHTML = entries.map(([word, { data }]) => {
+    const senses = sensesOf(data);
+    return `<li class="gloss-item">
+        <span class="gloss-word" dir="rtl" lang="he">${esc(word)}</span>
+        <span class="gloss-sense">${senses.length
+          ? esc(senses.join(', '))
+          : '<span class="empty">no gloss recorded</span>'}</span>
+      </li>`;
+  }).join('');
+}
+
+/* ---------- export ---------- */
+
+function glossMarkdown(doc) {
+  const entries = glossEntries(doc.id);
+  const when = new Date().toISOString().slice(0, 10);
+  const lines = [
+    `# Glossary — ${doc.title}`,
+    '',
+    `${entries.length} word${entries.length === 1 ? '' : 's'} · exported ${when}`,
+    '',
+  ];
+
+  for (const [word, { data }] of entries) {
+    lines.push(`## ${word}`, '');
+    if (data.gimatria) lines.push(`Hebrew numeral · **${data.gimatria}**`, '');
+
+    if (!data.splits || !data.splits.length) {
+      lines.push('- No analysis found for this word.', '');
+      continue;
+    }
+    for (const split of data.splits) {
+      lines.push(`- ${split.whole_word
+        ? `**${split.base}**`
+        : `**${split.prefix}** + **${split.base}**`}`);
+      for (const r of split.readings || []) {
+        const bits = [`**${r.stem}**`];
+        const features = featureList(r.features).join(', ');
+        if (features) bits.push(`_${features}_`);
+        if (r.glosses && r.glosses.length) bits.push(r.glosses.join(', '));
+        lines.push(`  - ${bits.join(' — ')}`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// A text titled only in Hebrew leaves nothing behind, so fall back to its id.
+const slug = (title, id) =>
+  title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || id;
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+glossExport.addEventListener('click', () => {
+  const doc = currentId && loadAll().find((t) => t.id === currentId);
+  if (!doc) return;
+  download(`hebmorph-glossary-${slug(doc.title, doc.id)}.md`, glossMarkdown(doc));
+});
+
 /* ---------- views ---------- */
 
 function renderList(activeId) {
@@ -328,6 +485,8 @@ function renderList(activeId) {
   }));
 }
 
+let currentId = null; // the text on screen, and so the glossary being filled
+
 function route() {
   const id = location.hash.startsWith('#/t/') ? location.hash.slice(4) : null;
   const doc = id && loadAll().find((t) => t.id === id);
@@ -336,12 +495,16 @@ function route() {
 
   closePop();
   anchored = null; // the words it pointed at are about to be replaced
+  currentId = doc ? doc.id : null;
   $('#view-new').hidden = !!doc;
   $('#view-read').hidden = !doc;
+  $('#view-gloss').hidden = !doc;
 
   if (doc) {
     $('#read-title').textContent = doc.title;
     renderText(readBody, doc.text);
+    renderGloss(doc.id);
+    markCollected();
   }
 
   renderList(doc ? doc.id : null);
