@@ -82,6 +82,7 @@ function renderText(host, text) {
       b.className = 'w';
       b.textContent = raw;
       b.dataset.word = query;
+      b.dataset.at = match.index; // where to cut the context from, later
       out.append(b);
     } else {
       out.append(raw);
@@ -204,6 +205,55 @@ async function analyze(word) {
   }
 }
 
+/* ---------- lookups ---------- */
+
+const CONTEXT = 180; // characters either side of the word
+
+function contextOf(word) {
+  const doc = currentDoc();
+  const at = Number(word.dataset.at);
+  if (!doc || !Number.isInteger(at)) return '';
+  return doc.text
+    .slice(Math.max(0, at - CONTEXT), at + word.textContent.length + CONTEXT)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function gptPrompt(word, data) {
+  const json = data ? JSON.stringify(data) : '';
+  const context = contextOf(word);
+  return [
+    `I am reading Hebrew and want to understand the word ${word.textContent}` +
+      (word.textContent === word.dataset.word ? '.'
+        : ` (without niqqud: ${word.dataset.word}).`),
+    context && `It appears here: ${context}`,
+    json && `A morphological analyzer built on hspell returned this JSON: ${json}`,
+    'In English, explain: what the word means in this context; its full ' +
+      'morphology (root, binyan or mishkal, part of speech, gender, number, ' +
+      'person, tense, and any prefixes or suffixes such as the conjunction ' +
+      'vav, the definite article, prepositions or possessive endings); its ' +
+      'dictionary form and how it inflects into this one; and anything the ' +
+      'analyzer above got wrong, missed, or could not disambiguate. Be ' +
+      'precise and concise.',
+  ].filter(Boolean).join('\n\n');
+}
+
+// Pealim and Reverso index undotted spelling, so they get the normalized word;
+// Google Translate reads the word as it stands in the text.
+function setLookups(word, data) {
+  const plain = encodeURIComponent(word.dataset.word);
+  $('#link-reverso').href =
+    `https://context.reverso.net/translation/hebrew-english/${plain}`;
+  $('#link-translate').href = 'https://translate.google.com/?sl=iw&tl=en&op=translate' +
+    `&text=${encodeURIComponent(word.textContent)}`;
+  $('#link-pealim').href = `https://www.pealim.com/search/?q=${plain}`;
+  // Hebrew costs nine URL characters a letter, so a long analysis can outgrow
+  // what a browser will send; that one drops the JSON rather than the link.
+  const gpt = (d) => `https://chatgpt.com/?prompt=${encodeURIComponent(gptPrompt(word, d))}`;
+  const url = gpt(data);
+  $('#link-gpt').href = url.length > 12000 ? gpt(null) : url;
+}
+
 /* ---------- popover ---------- */
 
 const pop = $('#pop');
@@ -250,12 +300,15 @@ async function openPop(word, byClick, collect = byClick) {
 
     $('#pop-word').textContent = word.dataset.word;
     $('#pop-body').innerHTML = '<p class="empty">Analyzing…</p>';
+    setLookups(word, null); // usable before the analysis lands
   }
 
   if (!pop.matches(':popover-open')) pop.showPopover();
   if (!CAN_ANCHOR) place(word);
 
   const data = await analyze(word.dataset.word);
+  if (data && word === active) setLookups(word, data);
+
   // Only a click collects: hovering across a line must not fill the glossary
   // with everything the pointer passed over.
   if (collect && data && currentId && addToGloss(currentId, word.dataset.word, data)) {

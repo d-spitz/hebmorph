@@ -290,6 +290,19 @@ textarea:focus-visible { border-color: var(--accent); }
 
 .note { margin-block-start: .35rem; font-size: .75rem; line-height: 1.45; color: var(--muted); }
 
+/* ---------- lookups ---------- */
+
+.lookups { border-block-start: 1px solid var(--line); font-size: .8rem; }
+.lookups summary { padding: .5rem .85rem; color: var(--muted); cursor: pointer; }
+.lookups summary:hover { color: var(--text); }
+
+.lookup-list {
+  list-style: none; padding: 0 .85rem .75rem;
+  display: flex; flex-direction: column; gap: .35rem;
+}
+.lookup-list a { color: var(--accent); text-decoration: none; }
+.lookup-list a:hover { text-decoration: underline; }
+
 /* ---------- mobile ---------- */
 
 @media (max-width: 899px) {
