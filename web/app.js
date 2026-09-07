@@ -231,10 +231,12 @@ function gptPrompt(word, data) {
     'In English, explain: what the word means in this context; its full ' +
       'morphology (root, binyan or mishkal, part of speech, gender, number, ' +
       'person, tense, and any prefixes or suffixes such as the conjunction ' +
-      'vav, the definite article, prepositions or possessive endings); its ' +
-      'dictionary form and how it inflects into this one; and anything the ' +
-      'analyzer above got wrong, missed, or could not disambiguate. Be ' +
-      'precise and concise.',
+      'vav, the definite article, prepositions or possessive endings); and ' +
+      'its dictionary form and how it inflects into this one. Be precise and ' +
+      'concise. Treat the JSON as raw input to work from, not as a claim to ' +
+      'grade: do not review, rate or list what it got right, missed or left ' +
+      'implicit, and say nothing about it at all unless it is outright wrong ' +
+      'about this word — in which case say so in one line and move on.',
   ].filter(Boolean).join('\n\n');
 }
 
