@@ -150,21 +150,30 @@ components:
           example: פ,נ,3,יחיד,עבר
         features:
           $ref: "#/components/schemas/Features"
+        lemma:
+          type: string
+          description: |
+            The distinct word this reading means, as it is spelled. `glosses`
+            and `rank` belong to the lemma, not to `stem`.
+
+            A lemma is one word, not one spelling. Hebrew writes no vowels, so
+            unrelated words collide: `את` is the direct-object marker, the
+            preposition "with", and the pronoun "you" — three lemmas that
+            share a spelling, told apart by their readings. Conversely one
+            lemma answers for many words, since inflection does not change
+            meaning: every form of `מלך` as a verb means "to reign".
+
+            Usually the same as `stem`, but not always. Names, acronyms and
+            particles have no stem in the dictionary — they all report `שונות`
+            — and are their own lemma, so `אדם` is "man, person" through its
+            stem and "Adam" through its proper-noun reading, both under the
+            lemma `אדם`.
+          example: מלך
         glosses:
           type: array
-          description: |
-            English translations of the reading's lemma, in its part of
-            speech, most representative sense first. Translation is per lemma
-            and part of speech, not per inflected form, so every reading of
-            `מלך` as a verb glosses as "to reign" and every reading of it as a
-            noun as "king".
-
-            The lemma is normally the stem. Proper nouns, acronyms and
-            particles have no stem in the dictionary — they all report `שונות`
-            — and are glossed as themselves, so `אדם` reads "man, person"
-            through its stem and "Adam" through its proper-noun reading.
-
-            Omitted when the lemma has no translation for that part of speech.
+          description: >-
+            English senses of the reading's lemma, most representative first.
+            Omitted when the lemma has no verified translation.
           items:
             type: string
           example: [to reign, to rule]
@@ -172,16 +181,15 @@ components:
           type: integer
           description: |
             How common this reading's lemma is in Modern Hebrew: rank 1 is the
-            most frequent lemma in the dictionary, and the least frequent ranks
-            last. The readings of a split are returned in this order.
+            most frequent in the dictionary, and the least frequent ranks last.
+            The readings of a split are returned in this order.
 
-            Frequency is counted per lemma, not per reading of an inflected
-            form, so this is a suggested ordering rather than a claim about
-            this occurrence: `מלכה` is "queen" more often than "her king",
-            but `מלך` is the commoner lemma and so leads.
+            Frequency is counted per spelling, so lemmas that share one share a
+            rank and tie. Treat it as a suggested ordering rather than a claim
+            about this occurrence: `מלכה` is "queen" more often than "her
+            king", but `מלך` is the commoner spelling and so leads.
 
-            Omitted for a lemma the frequency table does not cover; those sort
-            last.
+            Omitted for a lemma the corpus never saw; those sort last.
           minimum: 1
           maximum: 65535
           example: 661
@@ -195,7 +203,24 @@ components:
       properties:
         part_of_speech:
           type: string
-          enum: [noun, verb, adjective]
+          description: >-
+            hspell records only `noun`, `verb` and `adjective`, leaving every
+            particle, pronoun and preposition in the language blank. The
+            remaining values come from the lemma table, which types the
+            function words hspell does not — so every reading with a lemma
+            reports one.
+          enum:
+            [
+              noun,
+              verb,
+              adjective,
+              particle,
+              preposition,
+              pronoun,
+              conjunction,
+              adverb,
+              interjection,
+            ]
         gender:
           type: string
           enum: [masculine, feminine]

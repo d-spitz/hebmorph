@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"compress/gzip"
 	_ "embed"
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	"io"
 )
 
-// hebrew.dict.gz is the UTF-8 dictionary, generated from hspell's original
-// ISO-8859-8 data by ./internal/gen. Format (gzipped): a uvarint word count,
-// then for each word (in sorted order): uvarint length + UTF-8 bytes, one
-// prefix-specifier byte, uvarint reading count, then that many
-// (uvarint stemIndex, uvarint dmask) pairs.
+// dictionary.json.gz is hspell's word list and morphology in UTF-8, generated
+// by ./internal/gen, plus the handful of spellings in
+// internal/gen/additions.json that hspell rejects but Modern Hebrew uses. It
+// is gzipped JSON: a hand-packed binary encoding saved only 10% after gzip,
+// which did not pay for a codec to keep in sync on both sides of the build.
 //
-//go:embed data/hebrew.dict.gz
+//go:embed data/dictionary.json.gz
 var dictGz []byte
 
 // reading is one morphological interpretation, referencing its stem by index
@@ -31,95 +30,52 @@ type dictionary struct {
 	index    map[string]int32 // word -> position in words
 	specs    []byte           // prefix specifier per word
 	readings [][]reading
-	glosses  map[int32][]glossGroup // lemma word index -> English translations
-	miscStem int32                  // index of hspell's catch-all stem, or -1
-	ranks    []uint16               // frequency rank per word index; see frequencies.go
+	lemmas   []lemma   // the sense table; see lemmas.go
+	lemmaOf  [][]int32 // parallel to readings: the lemma each one means
 }
 
-// lemmaOf returns the word index a reading is glossed and ranked under, and
-// whether it came from hspell's catch-all.
-//
-// The lemma is normally the stem. But hspell has no stem for proper nouns,
-// acronyms and particles: they all name the שונות bucket, so for those the
-// word is its own lemma, and the bucket flag tells the two apart — אדם is
-// "man, person" through its stem and "Adam" through the bucket, in the same
-// part of speech, on the same word.
-func (d *dictionary) lemmaOf(wordIndex, stemIndex int32) (lemma int32, bucket bool) {
-	if stemIndex == d.miscStem {
-		return wordIndex, true
-	}
-	return stemIndex, false
+// dictFile mirrors blob.Dict, the on-disk shape.
+type dictFile struct {
+	Words    []string `json:"words"`
+	Specs    []int    `json:"specs"`
+	Readings [][]struct {
+		StemIndex int32 `json:"s"`
+		Dmask     int32 `json:"d"`
+	} `json:"readings"`
 }
 
 func loadDictionary() (*dictionary, error) {
-	zr, err := gzip.NewReader(bytes.NewReader(dictGz))
-	if err != nil {
-		return nil, fmt.Errorf("open embedded dictionary: %w", err)
+	var f dictFile
+	if err := loadGzipJSON(dictGz, &f, "dictionary"); err != nil {
+		return nil, err
 	}
-	raw, err := io.ReadAll(zr)
-	if err != nil {
-		return nil, fmt.Errorf("decompress dictionary: %w", err)
+	n := len(f.Words)
+	if len(f.Specs) != n || len(f.Readings) != n {
+		return nil, fmt.Errorf("dictionary: %d words but %d specs and %d reading lists",
+			n, len(f.Specs), len(f.Readings))
 	}
-
-	r := bytes.NewReader(raw)
-	n64, err := binary.ReadUvarint(r)
-	if err != nil {
-		return nil, fmt.Errorf("read word count: %w", err)
-	}
-	n := int(n64)
 
 	d := &dictionary{
-		words:    make([]string, n),
+		words:    f.Words,
 		index:    make(map[string]int32, n),
 		specs:    make([]byte, n),
 		readings: make([][]reading, n),
 	}
 	for i := 0; i < n; i++ {
-		wlen, err := binary.ReadUvarint(r)
-		if err != nil {
-			return nil, fmt.Errorf("word %d length: %w", i, err)
-		}
-		w := make([]byte, wlen)
-		if _, err := io.ReadFull(r, w); err != nil {
-			return nil, fmt.Errorf("word %d bytes: %w", i, err)
-		}
-		spec, err := r.ReadByte()
-		if err != nil {
-			return nil, fmt.Errorf("word %d spec: %w", i, err)
-		}
-		nr, err := binary.ReadUvarint(r)
-		if err != nil {
-			return nil, fmt.Errorf("word %d reading count: %w", i, err)
-		}
-		rs := make([]reading, nr)
-		for j := range rs {
-			stemIdx, err := binary.ReadUvarint(r)
-			if err != nil {
-				return nil, fmt.Errorf("word %d reading %d stem: %w", i, j, err)
+		d.index[f.Words[i]] = int32(i)
+		d.specs[i] = byte(f.Specs[i])
+		rs := make([]reading, len(f.Readings[i]))
+		for j, r := range f.Readings[i] {
+			if r.StemIndex < 0 || int(r.StemIndex) >= n {
+				return nil, fmt.Errorf("dictionary: word %q reading %d names word %d, which is out of range",
+					f.Words[i], j, r.StemIndex)
 			}
-			dmask, err := binary.ReadUvarint(r)
-			if err != nil {
-				return nil, fmt.Errorf("word %d reading %d dmask: %w", i, j, err)
-			}
-			rs[j] = reading{stemIndex: int32(stemIdx), dmask: int32(dmask)}
+			rs[j] = reading{stemIndex: r.StemIndex, dmask: r.Dmask}
 		}
-
-		d.words[i] = string(w)
-		d.specs[i] = spec
 		d.readings[i] = rs
-		d.index[string(w)] = int32(i)
 	}
 
-	// Resolved once here so lemmaOf compares indexes, not strings.
-	d.miscStem = -1
-	if i, ok := d.index["שונות"]; ok {
-		d.miscStem = i
-	}
-
-	if err := d.loadGlosses(); err != nil {
-		return nil, err
-	}
-	if err := d.loadFrequencies(); err != nil {
+	if err := d.loadLemmas(); err != nil {
 		return nil, err
 	}
 	return d, nil
@@ -131,4 +87,16 @@ func (d *dictionary) specifier(word string) (byte, bool) {
 		return d.specs[i], true
 	}
 	return 0, false
+}
+
+// loadGzipJSON decodes one of the embedded gzipped JSON blobs into v.
+func loadGzipJSON(gz []byte, v any, name string) error {
+	zr, err := gzip.NewReader(bytes.NewReader(gz))
+	if err != nil {
+		return fmt.Errorf("open embedded %s: %w", name, err)
+	}
+	if err := json.NewDecoder(zr).Decode(v); err != nil {
+		return fmt.Errorf("decode %s: %w", name, err)
+	}
+	return nil
 }

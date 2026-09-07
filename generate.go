@@ -1,18 +1,14 @@
 package hebmorph
 
-// Regenerate the embedded UTF-8 dictionary from hspell's original ISO-8859-8
-// data files (kept under internal/gen/source for provenance and reproducibility).
+// Regenerate the embedded dictionary from hspell's original ISO-8859-8 data
+// files (kept under internal/gen/source for provenance and reproducibility),
+// plus the spellings in internal/gen/additions.json that hspell rejects but
+// Modern Hebrew uses.
 //
-//go:generate go run ./internal/gen -src internal/gen/source -out data/hebrew.dict.gz
+//go:generate go run ./internal/gen -src internal/gen/source -add internal/gen/additions.json -out data/dictionary.json.gz
 
-// Regenerate the embedded English gloss table from the two verified
-// translation sets. It joins on Hebrew text, so it runs after the dictionary
-// above.
+// Regenerate the embedded sense table: every distinct word the dictionary can
+// mean, with its English and frequency rank, and the lemma each reading
+// resolves to. It joins on Hebrew text, so it runs after the dictionary.
 //
-//go:generate go run ./internal/gen/translations -stems internal/gen/translate/translations.verified.jsonl -misc internal/gen/translate/misc.verified.jsonl -dict data/hebrew.dict.gz -out data/translations.json.gz
-
-// Regenerate the embedded Modern Hebrew frequency table, which decides the
-// order a word's readings come back in. It joins on Hebrew text too, so it
-// also runs after the dictionary.
-//
-//go:generate go run ./internal/gen/frequencies -src internal/gen/translate/lemma_frequencies.json -dict data/hebrew.dict.gz -out data/frequencies.json.gz
+//go:generate go run ./internal/gen/lemmas -dict data/dictionary.json.gz -out data/lemmas.json.gz

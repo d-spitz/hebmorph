@@ -8,8 +8,9 @@ state, and pronominal suffix).
 It is a modern, UTF-8-native rewrite of the analysis core of
 [hspell](http://hspell.ivrix.org.il). The dictionary (≈342k words) is embedded
 in the binary, so there is nothing to install or ship alongside it. Each reading
-also carries English glosses for its stem, so an analysis says what the word
-means as well as how it is built.
+also names the distinct word it means, with English glosses and a Modern Hebrew
+frequency rank, so an analysis says what the word means as well as how it is
+built — likeliest reading first.
 
 ## Library
 
@@ -116,56 +117,70 @@ Responses carry `Access-Control-Allow-Origin: *` so browsers on other origins
 can read them — the web portal below is served from GitHub Pages, so every call
 it makes is cross-origin.
 
-## English glosses
+## Lemmas: what a reading means
 
-Every reading carries `glosses`, the English senses of its lemma:
+Every reading names a `lemma` — the distinct word it means — and carries that
+lemma's English:
 
 ```json
-{ "stem": "מלך", "desc": "פ,נ,3,יחיד,עבר", "features": { "part_of_speech": "verb", ... },
-  "glosses": ["to reign", "to rule"] }
+{ "stem": "מלך", "desc": "פ,נ,3,יחיד,עבר", "lemma": "מלך",
+  "features": { "part_of_speech": "verb", ... },
+  "glosses": ["to reign", "to rule"], "rank": 661 }
 ```
 
-Translation is **per lemma and part of speech**, not per inflected form. The
-342k words collapse onto 22,412 lemmas, and tense, person and number do not
-change what a word means, so the table only has to hold a sense set per lemma —
-291 KB gzipped against the dictionary's 2.5 MB.
-
-Part of speech does matter: 1,153 stems are attested under more than one, and
-`מלך` means "to reign" as a verb and "king" as a noun. So each reading is
-answered with the glosses of its own part of speech, which is why the three
-readings of `מלכה` come back with different English:
+**A lemma is one word, not one spelling.** Hebrew writes no vowels, so
+unrelated words collide. `את` is three of them — the direct-object marker, the
+preposition "with", and the pronoun "you" — and each reading gets its own:
 
 ```sh
-curl -s http://localhost:8080/api/v1/analyze/מלכה | jq '.splits[0].readings[] | {desc, glosses}'
-# {"desc":"פ,נ,3,יחיד,עבר","glosses":["to reign","to rule"]}   verb, stem מלך
-# {"desc":"ע,ז,יחיד,כינוי/נ,3,יחיד","glosses":["king"]}        noun, stem מלך
-# {"desc":"ע,נ,יחיד","glosses":["queen"]}                      noun, stem מלכה
+curl -s http://localhost:8080/api/v1/analyze/את | jq -c '.splits[0].readings[] | {lemma, part_of_speech: .features.part_of_speech, glosses}'
+# {"lemma":"את","part_of_speech":"particle","glosses":["direct object marker"]}
+# {"lemma":"את","part_of_speech":"pronoun","glosses":["you (feminine singular)"]}
+# {"lemma":"את","part_of_speech":"noun","glosses":["plowshare","mattock"]}
 ```
 
-### Words with no stem
+Conversely one lemma answers for many words: tense, person and number do not
+change meaning, so the 342k words collapse onto 23,729 lemmas.
 
-Most lemmas are stems, but 1,633 words have none. hspell files proper nouns
-(`אביגיל`), acronyms (`צה"ל`), and particles (`אולי`, `עכשיו`, `אבל`) under a
-catch-all "stem" `שונות` for want of a real one — so they are their own lemmas,
-keyed by themselves rather than by a stem.
-
-A word can be both, in the same part of speech, which is why the distinction is
-recorded rather than inferred. `אדם` is a common noun through its stem and a
-name through the catch-all, and the two readings are glossed apart:
+The lemma is usually the stem, but the two are different ideas and the API
+reports both. Names, acronyms and particles have no stem — hspell files them
+all under a catch-all `שונות` — so they are their own lemma, which is why `אדם`
+reads "man, person" through its stem and "Adam" through its proper-noun
+reading, both under the lemma `אדם`:
 
 ```sh
-curl -s http://localhost:8080/api/v1/analyze/אדם | jq '.splits[0].readings[] | {stem, glosses}'
-# {"stem":"אדם","glosses":["man","person","human being"]}
-# {"stem":"שונות","glosses":["Adam"]}       the proper-noun reading
+curl -s http://localhost:8080/api/v1/analyze/אדם | jq -c '.splits[0].readings[] | {stem, lemma, glosses}'
+# {"stem":"אדם","lemma":"אדם","glosses":["man","person","human being"]}
+# {"stem":"שונות","lemma":"אדם","glosses":["Adam"]}
 ```
 
-The field is omitted when a lemma has no gloss for the reading's part of
-speech. 22,410 of the 22,412 lemmas are translated; a `TestGlossCoverage` guard
-fails the build if a regeneration drops below 99%.
+Which lemma a reading means is decided when the data is built and stored per
+reading, so nothing at runtime has to work it out — the answer is an array
+index. It cannot be a rule, because hspell's own data does not always separate
+the words; see [Provenance & correctness](#provenance--correctness).
 
-The glosses are machine-generated and machine-verified, not lexicographer-
-written — see [Provenance & correctness](#provenance--correctness). They are
-meant as a reading aid, not as a dictionary of record.
+### Parts of speech
+
+hspell records only `noun`, `verb` and `adjective`, which leaves every
+particle, pronoun and preposition in the language blank. The lemma table types
+those too, adding `particle`, `preposition`, `pronoun`, `conjunction`,
+`adverb` and `interjection` — so `של` reports `preposition`, `את` can report
+`pronoun`, and `אוי` reports `interjection`.
+
+Every lemma is typed: 23,340 take their part of speech from hspell and 389
+from the two audits described under [Provenance](#provenance--correctness).
+
+| POS | lemmas |     | POS | lemmas |
+|---|---:|---|---|---:|
+| noun | 14,348 | | adverb | 146 |
+| verb | 4,726 | | particle | 83 |
+| adjective | 4,266 | | pronoun | 69 |
+| preposition | 53 | | interjection | 20 |
+| conjunction | 18 | | | |
+
+Glosses are machine-generated and machine-verified, not lexicographer-written
+— see [Provenance & correctness](#provenance--correctness). They are meant as a
+reading aid, not a dictionary of record.
 
 ## Reading order
 
@@ -179,9 +194,9 @@ ordered by how often they occur in a corpus of Modern Hebrew, 1 being the most
 frequent — and readings come back in that order, likeliest first:
 
 ```sh
-curl -s http://localhost:8080/api/v1/analyze/אביהו | jq -c '.splits[0].readings[] | {stem, rank, glosses}'
-# {"stem":"אב","rank":302,"glosses":["father"]}        "his father"
-# {"stem":"שונות","rank":20438,"glosses":["Avihu"]}    the name
+curl -s http://localhost:8080/api/v1/analyze/אביהו | jq -c '.splits[0].readings[] | {stem, lemma, rank, glosses}'
+# {"stem":"אב","lemma":"אב","rank":913,"glosses":["father"]}         "his father"
+# {"stem":"שונות","lemma":"אביהו","rank":19648,"glosses":["Avihu"]}  the name
 ```
 
 Frequency is counted **per lemma**, so this is a suggested ordering, not a
@@ -218,23 +233,24 @@ geresh/gershayim to ASCII — so pointed text does not simply 400.
   of MB and lookups are `map` hits (~ns). SQLite/FST would add a dependency and
   memory-mapping complexity for no measurable benefit at this size, so they were
   deliberately not used.
-- **Embedded data.** `data/hebrew.dict.gz` (~2.5 MB),
-  `data/translations.json.gz` (~291 KB) and `data/frequencies.json.gz` (~65 KB)
-  are embedded via `go:embed`; the binary is self-contained.
-- **Glosses keyed by lemma index.** The translation table reuses the word index
-  a reading already carries in `stemIndex`, so attaching English to a reading is
-  one map hit and no string work. The frequency table is keyed the same way, and
-  inverted at load into one rank per word index, so ranking a reading is an
-  array index.
-- **Rank stored as an order, not a number.** A rank is a position, so
-  `frequencies.json.gz` is just the lemmas in rank order. That halves the file
-  against index/rank pairs and leaves a duplicated or skipped rank
-  unrepresentable rather than merely unlikely.
-- **Packed bytes only where they pay.** The dictionary blob is a transcription
-  of hspell's own compact on-disk encoding. The gloss table, a fourteenth its
-  size, is plain gzipped JSON: packing it by hand saves 4% of bytes and 15 ms of
-  one-time decoding, which does not pay for a codec to keep in sync on both
-  sides of the build — and `zcat | jq` reads what actually shipped.
+- **Embedded data, two files.** `data/dictionary.json.gz` (~2.5 MB) is hspell's
+  words and morphology; `data/lemmas.json.gz` (~740 KB) is everything they
+  *mean*. Both are embedded via `go:embed`, so the binary is self-contained.
+  The split is the same one the code makes: morphology is hspell's and is
+  transcribed, meaning is this project's and is curated.
+- **Plain gzipped JSON, no hand-rolled codec.** The dictionary was once packed
+  into hspell's own uvarint encoding. Gzip closes all but 10% of the gap, which
+  did not pay for an encoder and two decoders to keep in sync across the build
+  — and `zcat | jq` reads what actually shipped. The cost is one-time decode at
+  `New()`.
+- **Lemmas resolved at build time.** Which lemma a reading means is worked out
+  by `internal/gen/lemmas` and stored per reading, so the runtime does no
+  resolution at all: it reads the answer out of an array. That has to be a
+  stored table rather than a rule, because hspell's data does not always
+  separate words that share a stem — see Provenance below.
+- **One concept, not three.** Glosses, frequency rank and part of speech all
+  hang off the lemma, so there is one table to key, one id space, and nothing
+  to keep in sync between them.
 
 Source files:
 
@@ -245,8 +261,7 @@ Source files:
 | `features.go`      | dmask → `Features`, native Hebrew description, specifier|
 | `gimatria.go`      | canonical Hebrew-numeral recognition                   |
 | `data.go`          | embedded dictionary decode + lookup                    |
-| `translations.go`  | embedded gloss table decode + per-lemma, per-POS lookup |
-| `frequencies.go`   | embedded frequency table decode + per-lemma rank       |
+| `lemmas.go`        | embedded sense table decode + per-reading lemma lookup |
 | `prefixes_data.go` | generated legal-prefix table                           |
 | `api/openapi.yaml` | HTTP API spec; `api/api.gen.go` is generated from it   |
 | `api/server.go`    | the handler behind the generated routing               |
@@ -254,34 +269,39 @@ Source files:
 
 ## Regenerating the embedded data
 
-All three files are built by `go generate`, in order — the gloss and frequency
-tables both join on Hebrew text, so the dictionary has to exist first:
+Both files are built by `go generate`, in order — the sense table joins on
+Hebrew text, so the dictionary has to exist first:
 
 ```sh
 go generate ./...
-# == go run ./internal/gen -src internal/gen/source -out data/hebrew.dict.gz
-# && go run ./internal/gen/translations \
-#      -stems internal/gen/translate/translations.verified.jsonl \
-#      -misc  internal/gen/translate/misc.verified.jsonl \
-#      -dict data/hebrew.dict.gz -out data/translations.json.gz
-# && go run ./internal/gen/frequencies \
-#      -src internal/gen/translate/lemma_frequencies.json \
-#      -dict data/hebrew.dict.gz -out data/frequencies.json.gz
+# == go run ./internal/gen -src internal/gen/source \
+#      -add internal/gen/additions.json -out data/dictionary.json.gz
+# && go run ./internal/gen/lemmas \
+#      -dict data/dictionary.json.gz -out data/lemmas.json.gz
 ```
 
-The dictionary comes from hspell's original data files, the glosses from the two
-verified translation sets — one per stem, one for the catch-all words that have
-none — and the ranks from a lemma-frequency count over a Modern Hebrew corpus.
-All sources are kept under `internal/gen/` for provenance. The translation step
-reports coverage and drops any gloss whose part of speech the lemma has no
-reading in: nothing could carry it. The frequency step reports coverage too, and
-drops any lemma the dictionary does not have or never ranks a reading by, then
-renumbers the ranks it kept so they stay a gapless order.
+The dictionary is hspell's original data transcribed to UTF-8, plus the
+spellings in `internal/gen/additions.json`. The sense table joins four curated
+sources — per-stem glosses, glosses for the words hspell gives no stem, the
+audit of its function-word blocks, and hand-written lemmas — and ranks
+everything against a Modern Hebrew corpus word count. All sources live under
+`internal/gen/` for provenance, and both steps report coverage.
+
+Inputs to `internal/gen/lemmas`:
+
+| Source                                     | What it contributes                    |
+|--------------------------------------------|----------------------------------------|
+| `translate/translations.verified.jsonl`    | English per stem and part of speech    |
+| `translate/misc.verified.jsonl`            | English for words with no stem         |
+| `translate/milot_audited.jsonl`            | hspell's function-word blocks, split into the real words they contain |
+| `curated_lemmas.json`                      | hand-written lemmas (the pronouns)     |
+| `additions.json`                           | which lemma each added spelling means  |
+| `translate/he_freq_raw.txt`                | corpus word counts, for `rank`         |
 
 ## Optional: SQLite export
 
 For deploying the dictionary as a database, an exporter builds a modern SQLite
-file from the same three blobs (the `hebmorph` package itself has no SQLite1
+file from the same two files (the `hebmorph` package itself has no SQLite
 dependency):
 
 ```sh
@@ -289,8 +309,9 @@ go run ./internal/gen/sqlite | sqlite3 dist/hebrew.db
 ```
 
 The result uses `STRICT` tables, `WITHOUT ROWID` where the natural key is the
-whole row, foreign keys, `user_version` (3 — 2 was the dictionary without
-frequencies, 1 without glosses either), and two convenience views:
+whole row, foreign keys, `user_version` (4 — 3 kept glosses and frequencies in
+separate tables, 2 had no frequencies, 1 was the dictionary alone), and two
+convenience views:
 
 ```sql
 CREATE TABLE words (
@@ -307,60 +328,66 @@ CREATE TABLE readings (
   PRIMARY KEY (word_id, seq)
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE lemmas (                          -- one row per distinct word;
+  id      INTEGER PRIMARY KEY,                 -- word_id is NOT unique, since
+  word_id INTEGER NOT NULL REFERENCES words(id), -- unrelated words share a spelling
+  pos     TEXT    NOT NULL,
+  rank    INTEGER NOT NULL                     -- 1 is most frequent; 0 unranked
+) STRICT;
+
 CREATE TABLE glosses (
-  lemma_id INTEGER NOT NULL REFERENCES words(id),
-  pos      INTEGER NOT NULL,                   -- dmask & 3: 1 noun, 2 verb, 3 adjective
-  bucket   INTEGER NOT NULL,                   -- 1 when the lemma is the word itself
+  lemma_id INTEGER NOT NULL REFERENCES lemmas(id),
   seq      INTEGER NOT NULL,                   -- sense order, most representative first
   english  TEXT    NOT NULL,
-  PRIMARY KEY (lemma_id, pos, bucket, seq)
+  PRIMARY KEY (lemma_id, seq)
 ) STRICT, WITHOUT ROWID;
 
-CREATE TABLE frequencies (
-  lemma_id INTEGER NOT NULL PRIMARY KEY REFERENCES words(id),
-  rank     INTEGER NOT NULL UNIQUE             -- 1 is the most frequent lemma
+CREATE TABLE reading_lemmas (                  -- what each reading means, resolved
+  word_id  INTEGER NOT NULL,                   -- when the data was built: no rule
+  seq      INTEGER NOT NULL,                   -- to reapply, no catch-all case
+  lemma_id INTEGER NOT NULL REFERENCES lemmas(id),
+  PRIMARY KEY (word_id, seq),
+  FOREIGN KEY (word_id, seq) REFERENCES readings(word_id, seq)
 ) STRICT, WITHOUT ROWID;
 
-CREATE VIEW readings_view AS                   -- readings with resolved text,
-  SELECT r.word_id, w.word AS word, r.seq,     -- plus the lemma each is glossed by
-         r.stem_id, s.word AS stem, r.dmask,   -- and that lemma's frequency rank
-         CASE WHEN r.stem_id = 300672 THEN r.word_id ELSE r.stem_id END AS lemma_id,
-         r.stem_id = 300672 AS bucket,         -- 300672 is שונות, hspell's catch-all
-         f.rank AS rank
+CREATE VIEW readings_view AS                   -- readings with resolved text, plus
+  SELECT r.word_id, w.word AS word, r.seq,     -- the lemma each one means
+         r.stem_id, s.word AS stem, r.dmask,
+         rl.lemma_id, lw.word AS lemma, l.pos, l.rank
   FROM readings r JOIN words w ON w.id = r.word_id JOIN words s ON s.id = r.stem_id
-       LEFT JOIN frequencies f
-         ON f.lemma_id = CASE WHEN r.stem_id = 300672 THEN r.word_id ELSE r.stem_id END;
+       LEFT JOIN reading_lemmas rl ON rl.word_id = r.word_id AND rl.seq = r.seq
+       LEFT JOIN lemmas l ON l.id = rl.lemma_id
+       LEFT JOIN words lw ON lw.id = l.word_id;
 
 CREATE VIEW glosses_view AS                    -- glosses with resolved lemma text
-  SELECT g.lemma_id, l.word AS lemma, g.pos, g.bucket, g.seq, g.english
-  FROM glosses g JOIN words l ON l.id = g.lemma_id;
+  SELECT g.lemma_id, lw.word AS lemma, l.pos, l.rank, g.seq, g.english
+  FROM glosses g JOIN lemmas l ON l.id = g.lemma_id
+       JOIN words lw ON lw.id = l.word_id;
 ```
 
 ```sh
 sqlite3 dist/hebrew.db "SELECT word, stem, dmask FROM readings_view WHERE word='מלכה';"
 
-# a reading and its English, the same match the Go analyzer makes. readings_view
-# already resolves which lemma a reading is glossed by, so the join does not
-# have to repeat the catch-all rule.
+# a reading and its English. readings_view already carries the lemma, so the
+# join is the same match the Go analyzer makes and repeats no rule.
 sqlite3 -header -column dist/hebrew.db "
-  SELECT r.word, r.stem, g.english FROM readings_view r
-    JOIN glosses g ON g.lemma_id = r.lemma_id AND g.bucket = r.bucket
-                  AND g.pos = r.dmask & 3
-    WHERE r.word = 'אדם';"
-# word  stem   english
-# אדם   אדם    man
-# אדם   אדם    person
-# אדם   אדם    human being
-# אדם   שונות  Adam
+  SELECT r.word, r.stem, r.lemma, r.pos, g.english
+    FROM readings_view r JOIN glosses g ON g.lemma_id = r.lemma_id
+    WHERE r.word = 'את' ORDER BY r.seq, g.seq;"
+# word  stem   lemma  pos       english
+# את    את     את     particle  direct object marker
+# את    שונות  את     pronoun   you (feminine singular)
+# את    את     את     noun      plowshare          -- twice: the plain noun
+# את    את     את     noun      mattock            -- reading and the construct
 
-# readings in the order the Go analyzer returns them. rank is NULL for an
-# unranked lemma, which SQLite sorts first, so put those last explicitly.
+# readings in the order the Go analyzer returns them. rank 0 means unranked,
+# which sorts last there, so order by "rank = 0, rank".
 sqlite3 -header -column dist/hebrew.db "
-  SELECT word, stem, rank FROM readings_view
-    WHERE word = 'אביהו' ORDER BY rank IS NULL, rank;"
-# word   stem   rank
-# אביהו  אב     302
-# אביהו  שונות  20438
+  SELECT word, stem, lemma, rank FROM readings_view
+    WHERE word = 'אביהו' ORDER BY rank = 0, rank;"
+# word   stem   lemma  rank
+# אביהו  אב     אב     913
+# אביהו  שונות  אביהו  19648
 ```
 
 Note the `readings` table holds every reading of a word; an application applies
@@ -397,8 +424,42 @@ were done separately by **Gemini 3.5 Flash Lite**, since a name or a particle
 needs a conventional English form rather than a translated sense.
 
 `internal/gen/translate/translations.verified.jsonl` and `misc.verified.jsonl`
-are those two reviewed sets, and the only inputs the embedded table is built
-from.
+are those two reviewed sets.
+
+### Where hspell's data needed correcting
+
+hspell is a **spellchecker**. It only ever had to answer "is this a word?", so
+it never needed to tell senses apart, and its morphological output is an
+optional feature (`--enable-linginfo`) built from data shaped for spelling. Two
+consequences matter here, and both are corrected by audits kept alongside the
+glosses.
+
+**Stems are positional in the hand-written files.** `binarize-desc.pl` assigns
+the first word of a block as the stem of every word in it. For the
+machine-generated noun and verb lists a block really is one word's inflections.
+For the hand-maintained function words a block is an editorial grouping, and
+one of them merges two unrelated words: `את` the object marker (`אותי`, `אותו`)
+and `את` the preposition "with" (`אתי`, `אתו`). All 17 forms would share one
+lemma, and so one gloss. `milot_audited.jsonl` is an audit of all 40 blocks —
+39 are genuine single words; that one is not.
+
+Its catch-all `שונות` is the same accident: it is simply the first line of
+`extrawords.hif`, inherited by the 2,000 lines below it. It reads as "this word
+has no stem", which is what the lemma table turns it back into.
+
+**Nothing outside noun/verb/adjective is typed.** `untyped_audited.jsonl` types
+the 521 function words that arrived with no part of speech, `לא` and `אני`
+among them.
+
+**A few words are missing or spelled against usage.** hspell's own
+subject-pronoun list (`extrawords.hif:530`) has eight of the ten pronouns and
+omits `אתם`/`אתן`; `curated_lemmas.json` supplies them. And hspell rejects the
+ktiv male spelling of "with" on prescriptive grounds — its `spellinghints` says
+to write `אתו`, not `איתו` — where ordinary Modern Hebrew does the opposite, so
+`additions.json` adds those 18 spellings.
+
+These corrections are deliberate divergences from hspell, confined to the sense
+layer and to `additions.json`; the morphology is still transcribed unchanged.
 
 That is machine drafting checked by machine review, not lexicography. It is good
 enough to read with and wrong often enough that it should not be cited. Errors
