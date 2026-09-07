@@ -133,7 +133,9 @@ components:
 
     Reading:
       type: object
-      description: One morphological interpretation of a base word.
+      description: >-
+        One morphological interpretation of a base word. Readings are ordered
+        by rank, most common in Modern Hebrew first.
       x-go-type: hebmorph.Reading
       x-go-type-import:
         path: hebmorph
@@ -166,6 +168,23 @@ components:
           items:
             type: string
           example: [to reign, to rule]
+        rank:
+          type: integer
+          description: |
+            How common this reading's lemma is in Modern Hebrew: rank 1 is the
+            most frequent lemma in the dictionary, and the least frequent ranks
+            last. The readings of a split are returned in this order.
+
+            Frequency is counted per lemma, not per reading of an inflected
+            form, so this is a suggested ordering rather than a claim about
+            this occurrence: `מלכה` is "queen" more often than "her king",
+            but `מלך` is the commoner lemma and so leads.
+
+            Omitted for a lemma the frequency table does not cover; those sort
+            last.
+          minimum: 1
+          maximum: 65535
+          example: 661
 
     Features:
       type: object

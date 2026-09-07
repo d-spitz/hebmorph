@@ -33,6 +33,22 @@ type dictionary struct {
 	readings [][]reading
 	glosses  map[int32][]glossGroup // lemma word index -> English translations
 	miscStem int32                  // index of hspell's catch-all stem, or -1
+	ranks    []uint16               // frequency rank per word index; see frequencies.go
+}
+
+// lemmaOf returns the word index a reading is glossed and ranked under, and
+// whether it came from hspell's catch-all.
+//
+// The lemma is normally the stem. But hspell has no stem for proper nouns,
+// acronyms and particles: they all name the שונות bucket, so for those the
+// word is its own lemma, and the bucket flag tells the two apart — אדם is
+// "man, person" through its stem and "Adam" through the bucket, in the same
+// part of speech, on the same word.
+func (d *dictionary) lemmaOf(wordIndex, stemIndex int32) (lemma int32, bucket bool) {
+	if stemIndex == d.miscStem {
+		return wordIndex, true
+	}
+	return stemIndex, false
 }
 
 func loadDictionary() (*dictionary, error) {
@@ -93,7 +109,17 @@ func loadDictionary() (*dictionary, error) {
 		d.readings[i] = rs
 		d.index[string(w)] = int32(i)
 	}
+
+	// Resolved once here so lemmaOf compares indexes, not strings.
+	d.miscStem = -1
+	if i, ok := d.index["שונות"]; ok {
+		d.miscStem = i
+	}
+
 	if err := d.loadGlosses(); err != nil {
+		return nil, err
+	}
+	if err := d.loadFrequencies(); err != nil {
 		return nil, err
 	}
 	return d, nil

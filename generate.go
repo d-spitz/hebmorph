@@ -10,3 +10,9 @@ package hebmorph
 // above.
 //
 //go:generate go run ./internal/gen/translations -stems internal/gen/translate/translations.verified.jsonl -misc internal/gen/translate/misc.verified.jsonl -dict data/hebrew.dict.gz -out data/translations.json.gz
+
+// Regenerate the embedded Modern Hebrew frequency table, which decides the
+// order a word's readings come back in. It joins on Hebrew text too, so it
+// also runs after the dictionary.
+//
+//go:generate go run ./internal/gen/frequencies -src internal/gen/translate/lemma_frequencies.json -dict data/hebrew.dict.gz -out data/frequencies.json.gz

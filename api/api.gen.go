@@ -34,7 +34,7 @@ type Features = hebmorph.Features
 // Possessive A pronominal (possessive/object) suffix.
 type Possessive = hebmorph.Possessive
 
-// Reading One morphological interpretation of a base word.
+// Reading One morphological interpretation of a base word. Readings are ordered by rank, most common in Modern Hebrew first.
 type Reading = hebmorph.Reading
 
 // Split One way to divide the word into a prefix and a base word.

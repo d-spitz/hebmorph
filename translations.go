@@ -40,12 +40,6 @@ func (d *dictionary) loadGlosses() error {
 	if err := json.NewDecoder(zr).Decode(&d.glosses); err != nil {
 		return fmt.Errorf("decode translations: %w", err)
 	}
-
-	// Resolved once here so glossesOf compares indexes, not strings.
-	d.miscStem = -1
-	if i, ok := d.index["שונות"]; ok {
-		d.miscStem = i
-	}
 	return nil
 }
 
@@ -53,16 +47,11 @@ func (d *dictionary) loadGlosses() error {
 // part of speech its dmask names, or nil when that pairing has no verified
 // translation. The returned slice is shared and must not be modified.
 //
-// The lemma is normally the stem. But hspell has no stem for proper nouns,
-// acronyms and particles: they all name the שונות bucket, so for those the
-// word is its own lemma, and the bucket flag tells the two apart — אדם is
-// "man, person" through its stem and "Adam" through the bucket, in the same
-// part of speech, on the same word.
+// A catch-all word and a stem can both gloss the same word in the same part of
+// speech — אדם is "man, person" through its stem and "Adam" through the
+// bucket — so the bucket flag from dictionary.lemmaOf is matched too.
 func (d *dictionary) glossesOf(wordIndex, stemIndex int32, dmask int) []string {
-	lemma, bucket := stemIndex, stemIndex == d.miscStem
-	if bucket {
-		lemma = wordIndex
-	}
+	lemma, bucket := d.lemmaOf(wordIndex, stemIndex)
 	for _, g := range d.glosses[lemma] {
 		if int(g.POS) == dmask&dTypeMask && g.Bucket == bucket {
 			return g.English

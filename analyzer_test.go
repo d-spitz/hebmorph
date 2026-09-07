@@ -1,6 +1,7 @@
 package hebmorph
 
 import (
+	"slices"
 	"sync"
 	"testing"
 )
@@ -33,9 +34,16 @@ func TestWholeWordAndSplits(t *testing.T) {
 		r0.Features.Number != "singular" || r0.Features.Gender != "feminine" {
 		t.Errorf("unexpected reading: %+v", r0)
 	}
-	// possessive suffix
-	poss := whole.Readings[2].Features.Possessive
-	if poss == nil || poss.Gender != "feminine" || poss.Person != "3" || poss.Number != "singular" {
+	// possessive suffix. Readings come back in frequency order, so find it
+	// rather than counting positions.
+	i := slices.IndexFunc(whole.Readings, func(r Reading) bool {
+		return r.Features.Possessive != nil
+	})
+	if i < 0 {
+		t.Fatalf("no reading with a possessive suffix: %+v", whole.Readings)
+	}
+	poss := whole.Readings[i].Features.Possessive
+	if poss.Gender != "feminine" || poss.Person != "3" || poss.Number != "singular" {
 		t.Errorf("unexpected possessive: %+v", poss)
 	}
 }
