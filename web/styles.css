@@ -193,10 +193,14 @@ textarea:focus-visible { border-color: var(--accent); }
 
 .glossary { margin-block-start: 2.5rem; padding-block-start: 1.25rem; border-block-start: 1px solid var(--line); }
 
-.gloss-head { display: flex; align-items: center; gap: 1rem; margin-block-end: .75rem; }
+.gloss-head { display: flex; align-items: center; gap: .25rem; margin-block-end: .75rem; }
 .gloss-head h2 { font-size: 1rem; font-weight: 600; margin-inline-end: auto; }
 
-.btn-ghost:disabled { opacity: .5; cursor: default; border-color: var(--line); }
+.icon-btn:disabled { opacity: .4; cursor: default; background: none; color: var(--muted); }
+
+/* The tick replaces the copy icon for a moment after a successful copy. */
+.i-done, #gloss-copy.is-done .i-copy { display: none; }
+#gloss-copy.is-done .i-done { display: block; color: var(--accent); }
 
 .gloss-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 

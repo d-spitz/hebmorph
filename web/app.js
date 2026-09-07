@@ -360,6 +360,7 @@ if (CAN_HOVER.matches) {
 
 const glossList = $('#gloss-list');
 const glossExport = $('#gloss-export');
+const glossCopy = $('#gloss-copy');
 
 // The same sense usually turns up under several readings, so dedupe.
 function sensesOf(data) {
@@ -387,7 +388,7 @@ const glossEntries = (id) =>
 
 function renderGloss(id) {
   const entries = glossEntries(id);
-  glossExport.disabled = !entries.length;
+  glossExport.disabled = glossCopy.disabled = !entries.length;
 
   if (!entries.length) {
     glossList.innerHTML =
@@ -456,10 +457,24 @@ function download(name, text) {
   URL.revokeObjectURL(url);
 }
 
+const currentDoc = () => currentId && loadAll().find((t) => t.id === currentId);
+
 glossExport.addEventListener('click', () => {
-  const doc = currentId && loadAll().find((t) => t.id === currentId);
+  const doc = currentDoc();
   if (!doc) return;
   download(`hebmorph-glossary-${slug(doc.title, doc.id)}.md`, glossMarkdown(doc));
+});
+
+glossCopy.addEventListener('click', async () => {
+  const doc = currentDoc();
+  if (!doc) return;
+  try {
+    await navigator.clipboard.writeText(glossMarkdown(doc));
+    glossCopy.classList.add('is-done');
+    setTimeout(() => glossCopy.classList.remove('is-done'), 1400);
+  } catch {
+    glossCopy.title = 'Could not reach the clipboard';
+  }
 });
 
 /* ---------- views ---------- */
